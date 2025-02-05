@@ -16,6 +16,32 @@
 \pagebreak
 \section{Tabular Methods}
 
+\subsection{Method Selection Guide}
+\begin{table}[h]
+\caption{Comparison of Tabular XAI Methods}
+\begin{center}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|p{3cm}|p{3cm}|p{3cm}|p{3cm}|}
+\hline
+\textbf{Use Case} & \textbf{PDP} & \textbf{ICE} & \textbf{Shapley} \\
+\hline
+Global Feature Effect & Best Choice & Limited & Good \\
+\hline
+Individual Predictions & Not Suitable & Good & Best Choice \\
+\hline
+Feature Interactions & Limited & Good & Limited \\
+\hline
+Categorical Features & Good & Good & Best Choice \\
+\hline
+Computational Cost & Low & Medium & High \\
+\hline
+Model Agnostic & Yes & Yes & Yes \\
+\hline
+\end{tabular}
+}
+\end{center}
+\end{table}
+
 \subsection{Partial Dependence Plots (PDP)}
 
 \subsubsection{Overview}
@@ -258,6 +284,31 @@ Looking at the Titanic survival predictions:
 \pagebreak
 \section{Text Data Methods}
 
+\subsection{Method Selection Guide}
+\begin{table}[h]
+\caption{Comparison of Text XAI Methods}
+\begin{center}
+\small
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+\textbf{Use Case} & \textbf{LIME} & \textbf{Gradient × Input} & \textbf{Attention} & \textbf{Embeddings} \\
+\hline
+Local Explanations & Best Choice & Good & Limited & Not Suitable \\
+\hline
+Token Importance & Good & Best Choice & Good & Not Suitable \\
+\hline
+Word Relationships & Not Suitable & Limited & Best Choice & Good \\
+\hline
+Model Understanding & Limited & Limited & Good & Best Choice \\
+\hline
+Computation Speed & Slow & Fast & Fast & Medium \\
+\hline
+Model Agnostic & Yes & No & No & Partial \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
 \subsection{LIME (Local Interpretable Model-agnostic Explanations)}
 
 \subsubsection{Overview}
@@ -442,6 +493,32 @@ LIT is an interactive platform for analyzing NLP models, combining multiple inte
 
 \pagebreak
 \section{Image Data Methods}
+
+\subsection{Method Selection Guide}
+\begin{table}[h]
+\caption{Comparison of Image XAI Methods}
+\begin{center}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|p{2.5cm}|p{2.5cm}|p{2.5cm}|p{2.5cm}|}
+\hline
+\textbf{Use Case} & \textbf{Grad-CAM} & \textbf{Integrated Gradients} & \textbf{Occlusion} \\
+\hline
+Localization & Best Choice & Good & Good \\
+\hline
+Pixel Attribution & Limited & Best Choice & Good \\
+\hline
+Model Agnostic & No & No & Yes \\
+\hline
+Computation Speed & Fast & Medium & Slow \\
+\hline
+Implementation & Medium & Complex & Simple \\
+\hline
+Resolution & Limited by Features & Full & Patch-based \\
+\hline
+\end{tabular}
+}
+\end{center}
+\end{table}
 
 \subsection{Grad-CAM (Gradient-weighted Class Activation Mapping)}
 
@@ -636,6 +713,74 @@ Based on implementation in \texttt{notebooks/mini\_challenge.ipynb}:
     \item Works for any differentiable model
     \item Provides pixel-level attributions for images
     \item Computationally tractable
+\end{itemize}
+
+\subsection{Occlusion Sensitivity Analysis}
+
+\subsubsection{Core Concept}
+Occlusion analysis answers: "How does hiding different parts of the image affect the model's prediction?" It does this by:
+\begin{itemize}
+    \item Systematically blocking out parts of the image
+    \item Measuring the change in prediction confidence
+    \item Creating a heatmap of importance regions
+\end{itemize}
+
+\subsubsection{Why It Works}
+\begin{itemize}
+    \item Simple and intuitive approach
+    \item If hiding a region significantly drops the prediction score, that region was important
+    \item Model-agnostic: works with any image classifier
+    \item Provides direct evidence of feature importance
+\end{itemize}
+
+\subsubsection{The Process}
+\begin{enumerate}
+    \item Choose occlusion parameters:
+        \begin{itemize}
+            \item Patch size (e.g., 8x8 pixels)
+            \item Stride (how much to move the patch)
+            \item Fill value (e.g., gray, black, or blur)
+        \end{itemize}
+    \item For each position:
+        \begin{itemize}
+            \item Create copy of image
+            \item Replace patch with chosen fill value
+            \item Get model's prediction
+            \item Record change in confidence
+        \end{itemize}
+    \item Create heatmap from recorded changes
+\end{enumerate}
+
+\subsubsection{Reading the Output}
+\begin{itemize}
+    \item \textbf{Heatmap Interpretation}:
+        \begin{itemize}
+            \item Darker regions: Occluding these areas greatly affected prediction
+            \item Lighter regions: Less important for the prediction
+            \item Size of important regions relates to patch size used
+        \end{itemize}
+    \item \textbf{What to Look For}:
+        \begin{itemize}
+            \item Are important regions semantically meaningful?
+            \item How do different patch sizes affect the result?
+            \item Are there unexpected important regions?
+        \end{itemize}
+\end{itemize}
+
+\subsubsection{Key Strengths}
+\begin{itemize}
+    \item Highly intuitive explanation method
+    \item No need for model gradients
+    \item Can use different occlusion strategies
+    \item Easy to implement and debug
+\end{itemize}
+
+\subsubsection{Limitations}
+\begin{itemize}
+    \item Computationally expensive (needs many forward passes)
+    \item Results depend on occlusion parameters
+    \item May miss fine-grained feature interactions
+    \item Rectangular patches might not match object shapes
 \end{itemize}
 
 \end{document} 
