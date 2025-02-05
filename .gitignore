@@ -336,3 +336,9 @@ tags
 .renku.lock
 .renku/tmp
 .renku/cache
+
+# LaTeX
+*.aux
+*.log
+*.out
+*.toc
