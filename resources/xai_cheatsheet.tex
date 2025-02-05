@@ -311,59 +311,237 @@ Model Agnostic & Yes & No & No & Partial \\
 \subsection{LIME (Local Interpretable Model-agnostic Explanations)}
 
 \subsubsection{Overview}
-LIME explains individual text predictions by approximating the complex model locally with an interpretable one.
+LIME explains individual predictions by training a simple, interpretable model that approximates the complex model's behavior in the local region around a specific input.
 
 \subsubsection{How it Works}
 \begin{enumerate}
-    \item \textbf{Input}: Take a text instance to explain
-    \item \textbf{Perturbation}: 
+    \item \textbf{Input Selection}:
         \begin{itemize}
-            \item Create variations of the input by removing words
-            \item Keep track of which words are present/absent
+            \item Take a text instance to explain (e.g., "Great movie but bad ending")
+            \item Choose number of perturbations to generate:
+                \begin{itemize}
+                    \item Maximum unique perturbations = $2^n$ where n is number of words
+                    \item Example: 5 words → $2^5 = 32$ possible unique perturbations
+                    \item Each word can be either present (1) or absent (0)
+                    \item Common practice: Sample with replacement if $2^n$ is large
+                    \item If $2^n$ is small: Generate all possible perturbations
+                \end{itemize}
+            \item Example with n=5 words:
+                \begin{itemize}
+                    \item Original: "Great movie but bad ending" → [1,1,1,1,1]
+                    \item Some possible perturbations:
+                        \begin{itemize}
+                            \item "Great [MASK] but bad ending" → [1,0,1,1,1]
+                            \item "Great movie but [MASK] ending" → [1,1,1,0,1]
+                            \item "[MASK] movie but bad [MASK]" → [0,1,1,1,0]
+                        \end{itemize}
+                \end{itemize}
         \end{itemize}
-    \item \textbf{Prediction}: Get model predictions for all variations
-    \item \textbf{Local Model}: 
+    
+    \item \textbf{Perturbation}:
         \begin{itemize}
-            \item Fit an interpretable model (e.g., linear) around the instance
-            \item Weight samples by proximity to original text
+            \item Create variations by randomly removing words
+            \item Each variation becomes a binary vector (1: word present, 0: word absent)
+            \item Example: "Great [MASK] but bad ending" → [1,0,1,1,1]
         \end{itemize}
-    \item \textbf{Explanation}: Show which words contributed positively/negatively
+    
+    \item \textbf{Get Predictions}:
+        \begin{itemize}
+            \item Run each perturbed text through the complex model
+            \item Store prediction scores (e.g., sentiment probabilities)
+            \item These become the target values for our local model
+        \end{itemize}
+    
+    \item \textbf{Local Model Training}:
+        \begin{itemize}
+            \item Fit a weighted linear model (e.g., weighted Ridge regression)
+            \item Training data:
+                \begin{itemize}
+                    \item X: Binary vectors showing which words are present/absent
+                    \item y: Complex model's predictions for each variation
+                \end{itemize}
+            \item Each training sample (variation) gets a weight in the regression:
+                \begin{itemize}
+                    \item Higher weights = variation has more influence on learned coefficients
+                    \item Lower weights = variation has less influence on learned coefficients
+                    \item Example with original text "Great movie but bad ending":
+                        \begin{itemize}
+                            \item "Great [MASK] but bad ending" → [1,0,1,1,1] → weight 0.9 (close to original)
+                            \item "Great [MASK] but [MASK] ending" → [1,0,1,0,1] → weight 0.5 (medium distance)
+                            \item "[MASK] [MASK] [MASK] bad ending" → [0,0,0,1,1] → weight 0.1 (very different)
+                        \end{itemize}
+                    \item These weights affect how much each variation influences the final coefficients
+                \end{itemize}
+            \item Why this matters:
+                \begin{itemize}
+                    \item Without weights: All variations equally influence the coefficients
+                    \item With weights: Variations similar to original text have more say
+                    \item Result: Coefficients better reflect local behavior
+                \end{itemize}
+            \item Formula: Minimize weighted least squares:
+                \begin{equation}
+                    \min_{\beta} \sum_{i} w_i(y_i - \beta^T x_i)^2 + \lambda\|\beta\|^2
+                \end{equation}
+                where:
+                \begin{itemize}
+                    \item $w_i = e^{-D(x,x_i)/\sigma^2}$ is the weight for variation $i$
+                    \item $y_i$ is the complex model's prediction for variation $i$
+                    \item $x_i$ is the binary vector for variation $i$
+                    \item $\beta$ are the coefficients we learn
+                \end{itemize}
+        \end{itemize}
+    
+    \item \textbf{Generate Explanation}:
+        \begin{itemize}
+            \item Linear model coefficients show word importance
+            \item Positive coefficient: Word pushes prediction higher
+            \item Negative coefficient: Word pushes prediction lower
+            \item Magnitude shows strength of influence
+        \end{itemize}
 \end{enumerate}
 
-\subsubsection{Example Interpretation}
-For a sentiment analysis model:
+\subsubsection{Example}
+For sentiment analysis of "Great movie but bad ending":
 \begin{itemize}
-    \item Positive words might be highlighted in green
-    \item Negative words might be highlighted in red
-    \item Weight of highlighting shows importance
-    \item Example: ``The movie was {\color{green}great} but the ending was {\color{red}disappointing}''
+    \item Local model coefficients might be:
+        \begin{itemize}
+            \item "Great": +0.4 (strongly positive)
+            \item "movie": +0.1 (slightly positive)
+            \item "but": -0.1 (slightly negative)
+            \item "bad": -0.3 (strongly negative)
+            \item "ending": -0.1 (slightly negative)
+        \end{itemize}
+    \item Final prediction combines these effects
+    \item Shows how each word contributes to sentiment
+\end{itemize}
+
+\subsubsection{Key Points}
+\begin{itemize}
+    \item \textbf{Local Approximation}:
+        \begin{itemize}
+            \item Only tries to be accurate near the specific instance
+            \item Doesn't need to explain global model behavior
+            \item Trade-off between locality and stability
+        \end{itemize}
+    \item \textbf{Interpretable Model}:
+        \begin{itemize}
+            \item Linear models are easy to interpret
+            \item Coefficients directly show feature importance
+            \item Can explain any classifier's predictions
+        \end{itemize}
+    \item \textbf{Sampling Strategy}:
+        \begin{itemize}
+            \item More samples = more stable explanations
+            \item Need enough variations to fit reliable local model
+            \item Balance between accuracy and computation time
+        \end{itemize}
 \end{itemize}
 
 \subsection{Gradient × Input}
 
 \subsubsection{Overview}
-Gradient × Input identifies important words by computing how much a small change in each input token would affect the prediction.
+Gradient × Input identifies which input tokens were most important for a model's prediction by combining the input's values with how sensitive the model is to changes in each input dimension.
 
-\subsubsection{Calculation}
+\subsubsection{Core Concept}
+\begin{itemize}
+    \item Basic idea: If both
+        \begin{itemize}
+            \item The input value is large AND
+            \item The model is very sensitive to changes in this input
+            \item Then this input was important for the prediction
+        \end{itemize}
+    \item For text: We look at each dimension of word embeddings
+    \item For images: We look at each pixel's color channels
+\end{itemize}
+
+\subsubsection{How it Works}
 \begin{enumerate}
-    \item Calculate gradient of output with respect to input embeddings
-    \item Multiply gradient by the actual input embeddings
-    \item Aggregate for each token (usually L2 norm across embedding dimensions)
+    \item \textbf{Get Model Sensitivity}:
+        \begin{itemize}
+            \item Compute gradient of target class score w.r.t. input
+            \item This tells us: "How would the prediction change if we slightly modified this input?"
+            \item Large gradient = Model is very sensitive to this input
+        \end{itemize}
+    
+    \item \textbf{Combine with Input Values}:
+        \begin{itemize}
+            \item Multiply gradient by actual input values
+            \item Why? Consider two cases:
+                \begin{itemize}
+                    \item Case 1: Large gradient × Small input $\approx$ Medium importance
+                    \item Case 2: Large gradient × Large input = High importance
+                \end{itemize}
+        \end{itemize}
+    
+    \item \textbf{For Text Specifically}:
+        \begin{itemize}
+            \item Each word is represented by embedding vector (e.g., 300 dimensions)
+            \item Compute gradient × input for each dimension
+            \item Aggregate across embedding dimensions (usually L2 norm):
+                \begin{equation}
+                    \text{importance}_{\text{word}} = \left\|\frac{\partial y^c}{\partial e_{\text{word}}} \odot e_{\text{word}}\right\|_2
+                \end{equation}
+            where:
+                \begin{itemize}
+                    \item $e_{\text{word}}$ is the word embedding
+                    \item $y^c$ is the target class score
+                    \item $\odot$ is element-wise multiplication
+                \end{itemize}
+        \end{itemize}
 \end{enumerate}
 
-\subsubsection{Properties}
+\subsubsection{Example}
+For sentiment analysis of "This movie was great!":
 \begin{itemize}
-    \item \textbf{Advantages}:
+    \item Word "great":
         \begin{itemize}
-            \item Computationally efficient
-            \item Exact gradient computation
-            \item Works with any differentiable model
+            \item Has large embedding values in positive sentiment dimensions
+            \item Model is very sensitive to these dimensions
+            \item Results in high importance score
         \end{itemize}
-    \item \textbf{Limitations}:
+    \item Word "was":
         \begin{itemize}
-            \item Can be noisy
-            \item May not capture non-linear interactions well
-            \item Requires model gradients
+            \item Has average embedding values
+            \item Model not very sensitive to changes
+            \item Results in low importance score
+        \end{itemize}
+\end{itemize}
+
+\subsubsection{Advantages}
+\begin{itemize}
+    \item \textbf{Computational Efficiency}:
+        \begin{itemize}
+            \item Only needs one backward pass
+            \item No need for multiple model evaluations
+            \item Can process entire batch at once
+        \end{itemize}
+    \item \textbf{Theoretical Foundation}:
+        \begin{itemize}
+            \item Based on model's actual computation graph
+            \item Captures direct relationship between input and prediction
+            \item Provides exact gradients, not approximations
+        \end{itemize}
+\end{itemize}
+
+\subsubsection{Limitations}
+\begin{itemize}
+    \item \textbf{Technical Constraints}:
+        \begin{itemize}
+            \item Requires model to be differentiable
+            \item Needs access to model gradients
+            \item May not work with discrete inputs directly
+        \end{itemize}
+    \item \textbf{Quality Issues}:
+        \begin{itemize}
+            \item Gradients can be noisy
+            \item Saturated neurons can mask importance
+            \item May miss complex feature interactions
+        \end{itemize}
+    \item \textbf{Interpretation Challenges}:
+        \begin{itemize}
+            \item Raw gradients can be hard to interpret
+            \item Need to handle negative values carefully
+            \item Results might need normalization for visualization
         \end{itemize}
 \end{itemize}
 
