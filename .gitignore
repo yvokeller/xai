@@ -342,3 +342,5 @@ tags
 *.log
 *.out
 *.toc
+
+~$*.pptx
